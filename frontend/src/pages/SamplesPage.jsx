@@ -21,6 +21,7 @@ export default function SamplesPage() {
                 <span className="badge badge-soft badge-info">{scenario.category}</span>
               </div>
               <p className="text-sm text-base-content/70">{scenario.summary}</p>
+              <p className="text-xs text-base-content/60">Examples: {scenario.examples?.length || 0}</p>
               <div className="rounded-box border border-base-300 bg-base-200 p-2 text-xs">
                 {scenario.samplePrompt}
               </div>

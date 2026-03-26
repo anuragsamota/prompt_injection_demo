@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { NavLink, useNavigate } from "react-router"
-import { ChevronDown, MoreHorizontal, ShieldAlert } from "lucide-react"
+import { ChevronDown, Download, MoreHorizontal, ShieldAlert, Upload } from "lucide-react"
 import { MessageSquarePlusIcon } from "../ui/message-square-plus"
 import { SearchIcon } from "../ui/search"
 import { SquarePenIcon } from "../ui/square-pen"
 import { DeleteIcon } from "../ui/delete"
-import { FlaskIcon } from "../ui/flask"
 import { ShieldCheckIcon } from "../ui/shield-check"
 import { demoModes } from "../../data/mockData"
 import { useUi } from "../../state/useUi"
@@ -18,7 +17,18 @@ function chatLinkClass(isActive) {
 
 export default function Sidebar() {
   const navigate = useNavigate()
-  const { selectedMode, setSelectedMode, setSidebarOpen, chats, createNewChat, renameChat, deleteChat } = useUi()
+  const uploadInputRef = useRef(null)
+  const {
+    selectedMode,
+    setSelectedMode,
+    setSidebarOpen,
+    chats,
+    createNewChat,
+    renameChat,
+    deleteChat,
+    exportAppState,
+    importAppState,
+  } = useUi()
   const [editingChatId, setEditingChatId] = useState(null)
   const [editingTitle, setEditingTitle] = useState("")
   const [openMenuChatId, setOpenMenuChatId] = useState(null)
@@ -94,13 +104,50 @@ export default function Sidebar() {
     setEditingTitle("")
   }
 
+  function handleDownloadState() {
+    const serialized = exportAppState()
+    const blob = new Blob([serialized], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `prompt-injection-state-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  function handleUploadClick() {
+    uploadInputRef.current?.click()
+  }
+
+  async function handleUploadState(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+
+    if (!file) {
+      return
+    }
+
+    const text = await file.text()
+    importAppState(text)
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto rounded-2xl border border-base-300/70 bg-base-100/90 p-3 shadow-xl shadow-black/10">
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleUploadState}
+      />
+
       <div className="mb-3">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-base-content/60">Prompt Injection</p>
-            <h1 className="text-xl font-semibold">Cyber Range</h1>
+            <p className="text-xs uppercase tracking-[0.2em] text-base-content/60"></p>
+            <h1 className="text-xl font-semibold">Prompt Injection Demo</h1>
           </div>
           <button className="btn btn-circle btn-ghost btn-sm lg:hidden" onClick={() => setSidebarOpen(false)}>
             x
@@ -122,6 +169,25 @@ export default function Sidebar() {
             aria-label="Search chats"
           />
         </label>
+
+        <div className="mb-2 flex items-center gap-2">
+          <button
+            className="btn btn-square btn-xs btn-ghost"
+            onClick={handleUploadClick}
+            title="Upload app state"
+            aria-label="Upload app state"
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="btn btn-square btn-xs btn-ghost"
+            onClick={handleDownloadState}
+            title="Download app state"
+            aria-label="Download app state"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
         <label className="fieldset">
           <span className="fieldset-legend text-xs text-base-content/70">Mode</span>
@@ -234,16 +300,10 @@ export default function Sidebar() {
         <div className="px-2 py-2 text-xs uppercase tracking-[0.16em] text-base-content/60">Explore</div>
         <ul className="menu w-full p-0 text-sm">
           <li>
-            <NavLink to="/samples" onClick={() => setSidebarOpen(false)}>
-              <FlaskIcon size={16} className="mr-2" />
-              Sample Prompts
-            </NavLink>
-          </li>
-          <li>
-            <a className="pointer-events-none opacity-60">
+            <NavLink to="/attack-scenarios" onClick={() => setSidebarOpen(false)}>
               <ShieldAlert className="mr-2 h-4 w-4" />
-              Attack Scenarios (Soon)
-            </a>
+              Attack Scenarios
+            </NavLink>
           </li>
           <li>
             <a className="pointer-events-none opacity-60">

@@ -14,6 +14,39 @@ import {
 import { loadPersistedState, savePersistedState } from "./persistence"
 import { UiContext } from "./uiContextValue"
 
+const STATE_FILE_VERSION = 1
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function normalizeImportedState(raw) {
+  if (!isObject(raw)) {
+    return null
+  }
+
+  const normalized = {
+    selectedMode: raw.selectedMode === "secured" ? "secured" : "unsecured",
+    utilityTab: typeof raw.utilityTab === "string" ? raw.utilityTab : "systemPrompt",
+    consoleTab: typeof raw.consoleTab === "string" ? raw.consoleTab : "logs",
+    promptScope: raw.promptScope === "global" ? "global" : "chat",
+    globalSystemPrompt:
+      typeof raw.globalSystemPrompt === "string" && raw.globalSystemPrompt.trim()
+        ? raw.globalSystemPrompt
+        : defaultSystemPrompt,
+    chatSystemPrompts: isObject(raw.chatSystemPrompts) ? raw.chatSystemPrompts : {},
+    draftSystemPrompt:
+      typeof raw.draftSystemPrompt === "string" && raw.draftSystemPrompt.trim()
+        ? raw.draftSystemPrompt
+        : defaultSystemPrompt,
+    chats: Array.isArray(raw.chats) ? raw.chats : getInitialChats(),
+    activeChatId: typeof raw.activeChatId === "string" || raw.activeChatId === null ? raw.activeChatId : null,
+    consoleEvents: Array.isArray(raw.consoleEvents) ? raw.consoleEvents : consoleEvents,
+  }
+
+  return normalized
+}
+
 export function UiProvider({ children }) {
   const [persisted] = useState(() => loadPersistedState())
 
@@ -45,8 +78,8 @@ export function UiProvider({ children }) {
   })
   const streamControllersRef = useRef({})
 
-  useEffect(() => {
-    savePersistedState({
+  function buildPersistableState() {
+    return {
       selectedMode,
       utilityTab,
       consoleTab,
@@ -57,7 +90,11 @@ export function UiProvider({ children }) {
       chats,
       activeChatId,
       consoleEvents: consoleEventList,
-    })
+    }
+  }
+
+  useEffect(() => {
+    savePersistedState(buildPersistableState())
   }, [
     selectedMode,
     utilityTab,
@@ -71,10 +108,90 @@ export function UiProvider({ children }) {
     consoleEventList,
   ])
 
-  function createNewChat() {
+  function exportAppState() {
+    const payload = {
+      meta: {
+        app: "prompt_injection_demo_frontend",
+        version: STATE_FILE_VERSION,
+        exportedAt: new Date().toISOString(),
+      },
+      state: buildPersistableState(),
+    }
+
+    return JSON.stringify(payload, null, 2)
+  }
+
+  function importAppState(rawJsonText) {
+    let parsed
+    try {
+      parsed = JSON.parse(rawJsonText)
+    } catch {
+      addConsoleEvent({
+        type: "status",
+        level: "error",
+        source: "state",
+        message: "Import failed: invalid JSON file",
+      })
+      return false
+    }
+
+    const candidate = isObject(parsed) && isObject(parsed.state) ? parsed.state : parsed
+    const nextState = normalizeImportedState(candidate)
+
+    if (!nextState) {
+      addConsoleEvent({
+        type: "status",
+        level: "error",
+        source: "state",
+        message: "Import failed: unsupported state schema",
+      })
+      return false
+    }
+
+    Object.values(streamControllersRef.current).forEach((controller) => controller.abort())
+    streamControllersRef.current = {}
+    setStreamingByChat({})
+
+    setSelectedMode(nextState.selectedMode)
+    setUtilityTab(nextState.utilityTab)
+    setConsoleTab(nextState.consoleTab)
+    setPromptScope(nextState.promptScope)
+    setGlobalSystemPrompt(nextState.globalSystemPrompt)
+    setChatSystemPrompts(nextState.chatSystemPrompts)
+    setDraftSystemPrompt(nextState.draftSystemPrompt)
+    setChats(nextState.chats)
+    setActiveChatId(nextState.activeChatId)
+    setConsoleEventList(nextState.consoleEvents)
+
+    savePersistedState(nextState)
+
+    addConsoleEvent({
+      type: "status",
+      level: "success",
+      source: "state",
+      message: "Application state imported",
+    })
+
+    return true
+  }
+
+  function createNewChat(options = {}) {
+    const { title, scenarioId, systemPrompt } = options
     const nextId = `chat-${Date.now()}`
-    const nextChat = createEmptyChat(nextId)
+    const nextChat = {
+      ...createEmptyChat(nextId),
+      ...(typeof title === "string" && title.trim() ? { title: title.trim() } : {}),
+      ...(typeof scenarioId === "string" ? { scenarioId } : {}),
+    }
     setChats((prevChats) => [nextChat, ...prevChats])
+
+    if (typeof systemPrompt === "string" && systemPrompt.trim()) {
+      setChatSystemPrompts((prevPrompts) => ({
+        ...prevPrompts,
+        [nextId]: systemPrompt.trim(),
+      }))
+    }
+
     setActiveChatId(nextId)
     return nextId
   }
@@ -186,11 +303,16 @@ export function UiProvider({ children }) {
     )
   }
 
-  async function sendMessage(chatId, userText) {
+  async function sendMessage(chatId, userText, options = {}) {
     const cleanText = userText.trim()
     if (!cleanText || !chatId || isChatStreaming(chatId)) {
       return false
     }
+
+    const effectiveSystemPrompt =
+      typeof options.systemPrompt === "string" && options.systemPrompt.trim()
+        ? options.systemPrompt.trim()
+        : getActiveSystemPrompt(chatId)
 
     const chatExists = chats.some((chat) => chat.id === chatId)
     if (!chatExists) {
@@ -208,7 +330,7 @@ export function UiProvider({ children }) {
     }))
 
     const ollamaMessages = [
-      { role: "system", content: getActiveSystemPrompt(chatId) },
+      { role: "system", content: effectiveSystemPrompt },
       ...historyMessages,
       { role: "user", content: cleanText },
     ]
@@ -550,6 +672,8 @@ export function UiProvider({ children }) {
     consoleEvents: consoleEventList,
     addConsoleEvent,
     clearConsoleEvents,
+    exportAppState,
+    importAppState,
   }
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>

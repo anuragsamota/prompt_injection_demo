@@ -3,7 +3,7 @@ import { useNavigate } from "react-router"
 import { PanelRightOpen, SendHorizontal, Square } from "lucide-react"
 import { MenuIcon } from "../ui/menu"
 import MarkdownMessage from "./MarkdownMessage"
-import { sampleScenarios } from "../../data/mockData"
+import { attackScenarios } from "../../data/mockData"
 import { useUi } from "../../state/useUi"
 
 function modeBadgeClass(mode) {
@@ -59,7 +59,7 @@ export default function ChatWorkspace({ chatId }) {
   }
 
   function handleRunSamplePrompt() {
-    const firstSample = sampleScenarios[0]
+    const firstSample = attackScenarios[0]
     if (!firstSample) {
       return
     }

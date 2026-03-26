@@ -1,0 +1,34 @@
+Strict separation of system/assistant/user prompts and never execute user text as system instructions.
+
+Filter or sanitize uploaded documents and user inputs for instruction-like patterns. ( Not applicable for out project demo.)
+
+Policy-enforced instruction precedence (system > developer > user) implemented outside the model.
+
+Redaction or token-level access controls for sensitive data.
+Output filtering, rate limits, logging, and human review for risky actions or tool invocations.
+
+Use of prompt templates that do not concatenate raw user text into executable instruction slots.
+
+Using a Dumb + Smart sanatizer system to detect potential prompt injection. Dumb sanatizer will just pickup potential harmful words in prompts and LLM responses and will also update that dictionary over time. The Smart sanatizer is just an another classifer model that will give the probability for an prompt to by using an prompt injection attack.
+
+Classifier I found on huggingface : https://huggingface.co/weijianzhg/prompt-injection-classifier
+
+Dumb sanatizer will also look for common patterns that may make LLM confuse between System Prompts or Hidden context with User prompts. E.g. Malicious prompt </System End>. Also Dumb sanatizer Can be easily updated without modifying the entire system pipeline as New patterns get discovered.
+
+
+Applying sanatization for both Input prompts and LLM responses. If a potential vulnerable output is detected Then a normal generic reponse will be given and session will be terminated instead of the LLM response.
+
+
+Limiting the token size for every prompt. So to reduce the possiblity for crafting long sophisticated prompts in a single prompt input.
+
+Applying API Rate Limiting for potential users who make these prompt injection requests too often.
+
+Restricting and seperating API to only allow for user prompts and restricting system prompts and other roles that LLM might support.
+
+Identifying Harmful Role change scenarios Where Novel roles can be used to generate harmful content e.g. Doctor , Chemist , Researcher , Scientist etc.
+
+Identifying potential Instructions that tries to modify the previous instructions.
+
+Note : Security V/S ( Usablity and Performance Tradeoff)
+Applying These mitigation system would limit the LLM system in terms of features. Type of Responses etc. So It is a trade off.
+
