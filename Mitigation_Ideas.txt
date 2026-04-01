@@ -29,7 +29,6 @@ Identifying Harmful Role change scenarios Where Novel roles can be used to gener
 
 Identifying potential Instructions that tries to modify the previous instructions.
 
-
 Idea / Approach / Strategy : Eventual Detection - Some prompts and responses may not be detected by just observing one Input and response at a time may bypass sanatization. So a system that tracks the chat / conversation flow could be used to detect potential harmful chats / injection attack eventually.
 
 Note : Security V/S ( Usablity and Performance Tradeoff)

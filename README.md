@@ -26,20 +26,18 @@ The project provides an interactive UI for exploring these concepts in real-time
 - **React Compiler** - Enabled for improved performance
 
 ### Backend
-- **Node.js** - Runtime environment
-- **Express** 5.2.1 - Web framework
-- **Dotenv** 17.3.1 - Environment configuration
-- **Nodemon** 3.1.14 - Auto-reload during development
-- **pnpm** 10.32.1 - Package manager (monorepo support)
+- **Python** 3.11+ - Runtime environment
+- **Flask** 3.1.1 - Web framework
+- **Requests** 2.32.4 - Ollama proxy and streaming client
+- **python-dotenv** 1.1.1 - Environment configuration
 
 ## Project Structure
 
 ```
 prompt_injection_demo/
-├── backend/                                 # Node.js/Express backend
-│   ├── index.js                            # Entry point
-│   ├── package.json                        # Backend dependencies
-│   └── pnpm-lock.yaml                      # Lock file
+├── backend/                                 # Python/Flask backend
+│   ├── app.py                              # Flask entry point
+│   └── requirements.txt                    # Backend dependencies
 │
 └── frontend/
     └── prompt_injection_demo_frontend/     # React/Vite frontend
@@ -98,7 +96,9 @@ cd prompt_injection_demo
 
 ```bash
 cd backend
-pnpm install
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### 3. Install Frontend Dependencies
@@ -114,7 +114,9 @@ Create a `.env` file in the `backend/` directory:
 
 ```env
 PORT=5000
-NODE_ENV=development
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=gemma3:latest
+CORS_ORIGIN=http://localhost:5173
 ```
 
 Add any API keys or configuration needed for LLM integration.
@@ -126,7 +128,7 @@ Add any API keys or configuration needed for LLM integration.
 **Terminal 1 - Backend:**
 ```bash
 cd backend
-pnpm run dev
+python app.py
 ```
 
 The backend will start on `http://localhost:5000` (or the port specified in `.env`)
@@ -177,16 +179,16 @@ pnpm run lint
 ```bash
 cd backend
 
-# Start dev server with auto-reload
-pnpm run dev
+# Start dev server
+python app.py
 
-# Start production server
-pnpm run start
+# Run behind a production WSGI server, if needed
+# gunicorn -b 0.0.0.0:5000 app:app
 ```
 
 **Backend Features:**
-- Nodemon watches for file changes and auto-restarts
-- Express.js for routing and middleware
+- Flask routing and middleware-style hooks
+- SSE streaming proxy to Ollama
 - Environment-based configuration
 
 ## Frontend Architecture
@@ -213,10 +215,11 @@ pnpm run start
 
 Frontend communicates with backend via REST/Streaming APIs defined in [Frontend-Backend Contract](frontend/prompt_injection_demo_frontend/docs/resources/07_frontend_backend_contract.md).
 
-Key endpoints (to be implemented):
+Implemented endpoints:
+- `GET /health` - backend and Ollama status
+- `GET /api/connection` - detailed Ollama connection check
 - `POST /api/chat` - Send message and get response
-- `POST /api/check-injection` - Analyze for prompt injection risk
-- `GET /api/scenarios` - Fetch sample injection scenarios
+- `POST /api/chat/stream` - Stream assistant responses as SSE
 
 ## Styling
 

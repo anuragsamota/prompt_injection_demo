@@ -78,9 +78,61 @@ export async function getBackendConnectionStatus() {
   }
 }
 
+export async function requestAssistantReply({
+  messages,
+  model,
+  mode,
+  sessionStart,
+  options,
+  format,
+  tools,
+  think,
+  keepAlive,
+  signal,
+}) {
+  const chatPath = mode === "secured" ? "/api/chat/secure" : "/api/chat"
+
+  const response = await fetch(`${BACKEND_BASE_URL}${chatPath}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages,
+      model,
+      sessionStart,
+      options,
+      format,
+      tools,
+      think,
+      keep_alive: keepAlive,
+    }),
+    signal,
+  })
+
+  const text = await safeReadText(response)
+  let data = null
+
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    data = null
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.details || data?.error || text || "Backend request failed")
+  }
+
+  return {
+    raw: data,
+    text: data?.message?.content || "",
+  }
+}
+
 export async function streamAssistantReply({
   messages,
   model,
+  mode,
   sessionStart,
   options,
   format,
@@ -98,7 +150,9 @@ export async function streamAssistantReply({
     message: "Connecting to backend proxy",
   })
 
-  const response = await fetch(`${BACKEND_BASE_URL}/api/chat/stream`, {
+  const streamPath = mode === "secured" ? "/api/chat/secure/stream" : "/api/chat/stream"
+
+  const response = await fetch(`${BACKEND_BASE_URL}${streamPath}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

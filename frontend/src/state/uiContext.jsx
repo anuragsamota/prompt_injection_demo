@@ -9,9 +9,10 @@ import {
 import {
   getBackendConnectionStatus,
   getBackendHealthStatus,
+  requestAssistantReply,
   streamAssistantReply,
 } from "../services/chatEngine"
-import { loadPersistedState, savePersistedState } from "./persistence"
+import { clearPersistedState, loadPersistedState, savePersistedState } from "./persistence"
 import { UiContext } from "./uiContextValue"
 
 const STATE_FILE_VERSION = 1
@@ -175,6 +176,32 @@ export function UiProvider({ children }) {
     return true
   }
 
+  function clearAppState() {
+    Object.values(streamControllersRef.current).forEach((controller) => controller.abort())
+    streamControllersRef.current = {}
+
+    setSelectedMode("unsecured")
+    setUtilityTab("systemPrompt")
+    setConsoleTab("logs")
+    setPromptScope("chat")
+    setGlobalSystemPrompt(defaultSystemPrompt)
+    setChatSystemPrompts({})
+    setDraftSystemPrompt(defaultSystemPrompt)
+    setChats(getInitialChats())
+    setActiveChatId(null)
+    setConsoleEventList(consoleEvents)
+    setStreamingByChat({})
+
+    clearPersistedState()
+
+    addConsoleEvent({
+      type: "status",
+      level: "warning",
+      source: "state",
+      message: "Application state cleared",
+    })
+  }
+
   function createNewChat(options = {}) {
     const { title, scenarioId, systemPrompt } = options
     const nextId = `chat-${Date.now()}`
@@ -336,6 +363,7 @@ export function UiProvider({ children }) {
     ]
 
     const sessionStart = historyMessages.length === 0
+    const useStreaming = options.stream !== false
 
     appendUserMessage(chatId, cleanText)
     setActiveChatId(chatId)
@@ -354,17 +382,29 @@ export function UiProvider({ children }) {
     let streamedText = ""
 
     try {
-      streamedText = await streamAssistantReply({
-        messages: ollamaMessages,
-        sessionStart,
-        options: selectedMode === "secured" ? { temperature: 0.2 } : { temperature: 0.7 },
-        signal: controller.signal,
-        onToken: (partialText) => {
-          streamedText = partialText
-          updateAssistantDraft(chatId, partialText)
-        },
-        onEvent: (event) => addConsoleEvent(event),
-      })
+      if (useStreaming) {
+        streamedText = await streamAssistantReply({
+          messages: ollamaMessages,
+          mode: selectedMode,
+          sessionStart,
+          options: selectedMode === "secured" ? { temperature: 0.2 } : { temperature: 0.7 },
+          signal: controller.signal,
+          onToken: (partialText) => {
+            streamedText = partialText
+            updateAssistantDraft(chatId, partialText)
+          },
+          onEvent: (event) => addConsoleEvent(event),
+        })
+      } else {
+        const result = await requestAssistantReply({
+          messages: ollamaMessages,
+          mode: selectedMode,
+          sessionStart,
+          options: selectedMode === "secured" ? { temperature: 0.2 } : { temperature: 0.7 },
+          signal: controller.signal,
+        })
+        streamedText = result.text
+      }
 
       finalizeAssistantMessage(chatId, streamedText)
       return true
@@ -674,6 +714,7 @@ export function UiProvider({ children }) {
     clearConsoleEvents,
     exportAppState,
     importAppState,
+    clearAppState,
   }
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>

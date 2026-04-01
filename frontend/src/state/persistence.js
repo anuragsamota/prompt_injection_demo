@@ -19,3 +19,11 @@ export function savePersistedState(state) {
     // Ignore storage failures so UI remains usable.
   }
 }
+
+export function clearPersistedState() {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Ignore storage failures so UI remains usable.
+  }
+}

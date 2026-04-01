@@ -6,7 +6,18 @@
 - API used by UI state:
   - `streamAssistantReply({ mode, userText, systemPrompt, signal, onToken, onEvent })`
 
-## Target Backend Endpoints
+## Backend Implementation
+- Runtime: Flask proxy in `backend/app.py`
+- Primary role: forward chat requests to Ollama while preserving the streaming contract used by the UI
+- Health/connection endpoints are available for status checks in the utility panel
+
+## Implemented Backend Endpoints
+- `GET /health`
+- `GET /api/connection`
+- `POST /api/chat`
+- `POST /api/chat/stream`
+
+## Future Expansion
 - `POST /api/chats`
 - `GET /api/chats`
 - `GET /api/chats/:chatId`

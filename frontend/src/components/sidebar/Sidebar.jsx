@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { NavLink, useNavigate } from "react-router"
-import { ChevronDown, Download, MoreHorizontal, ShieldAlert, Upload } from "lucide-react"
+import { ChevronDown, Download, MoreHorizontal, ShieldAlert, Trash2, Upload } from "lucide-react"
 import { MessageSquarePlusIcon } from "../ui/message-square-plus"
 import { SearchIcon } from "../ui/search"
 import { SquarePenIcon } from "../ui/square-pen"
@@ -28,6 +28,7 @@ export default function Sidebar() {
     deleteChat,
     exportAppState,
     importAppState,
+    clearAppState,
   } = useUi()
   const [editingChatId, setEditingChatId] = useState(null)
   const [editingTitle, setEditingTitle] = useState("")
@@ -133,6 +134,16 @@ export default function Sidebar() {
     importAppState(text)
   }
 
+  function handleClearState() {
+    const confirmed = window.confirm("Clear current app state? This will remove all chats and settings.")
+    if (!confirmed) {
+      return
+    }
+
+    clearAppState()
+    navigate("/chat/new")
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto rounded-2xl border border-base-300/70 bg-base-100/90 p-3 shadow-xl shadow-black/10">
       <input
@@ -186,6 +197,14 @@ export default function Sidebar() {
             aria-label="Download app state"
           >
             <Download className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="btn btn-square btn-xs btn-ghost text-error"
+            onClick={handleClearState}
+            title="Clear current app state"
+            aria-label="Clear current app state"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
 
