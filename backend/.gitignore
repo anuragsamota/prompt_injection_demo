@@ -3,3 +3,4 @@
 .env
 /cyber
 __pycache__
+.venv

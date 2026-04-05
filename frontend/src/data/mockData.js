@@ -81,14 +81,4 @@ export const attackScenarios = [
   },
 ]
 
-export const sampleScenarios = attackScenarios
-
 export const consoleEvents = []
-
-export function getScenarioById(scenarioId) {
-  return attackScenarios.find((scenario) => scenario.id === scenarioId)
-}
-
-export function getAttackScenarioById(scenarioId) {
-  return attackScenarios.find((scenario) => scenario.id === scenarioId)
-}

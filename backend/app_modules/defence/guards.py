@@ -256,7 +256,11 @@ class DefenceLayer:
         self.policy = RLPolicyAgent()
 
     def process_secured_request(self, messages: list[dict], system_prompt: str) -> dict[str, Any]:
-        """Process a chat request with RL-based security checks."""
+        """Process a chat request with RL-based security checks.
+
+        Defence is intentionally scoped to user messages only.
+        Runtime system prompt text is treated as trusted guardrails.
+        """
         if not self.enabled:
             LOGGER.info("[detector] enabled=false decision=allow reason=defence_disabled")
             return {"passed": True, "alerts": [], "modified_messages": messages}
@@ -276,8 +280,8 @@ class DefenceLayer:
             role = msg.get("role", "user")
             content = msg.get("content", "")
 
-            # Analyze only user/tool content as attack surface.
-            if role not in {"user", "tool"}:
+            # Analyze only user content as attack surface.
+            if role != "user":
                 modified_messages.append(msg)
                 continue
 

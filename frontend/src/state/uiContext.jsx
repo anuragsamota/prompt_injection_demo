@@ -28,6 +28,7 @@ function normalizeImportedState(raw) {
 
   const normalized = {
     selectedMode: raw.selectedMode === "secured" ? "secured" : "unsecured",
+    chatModes: isObject(raw.chatModes) ? raw.chatModes : {},
     utilityTab: typeof raw.utilityTab === "string" ? raw.utilityTab : "systemPrompt",
     consoleTab: typeof raw.consoleTab === "string" ? raw.consoleTab : "logs",
     promptScope: raw.promptScope === "global" ? "global" : "chat",
@@ -51,7 +52,8 @@ function normalizeImportedState(raw) {
 export function UiProvider({ children }) {
   const [persisted] = useState(() => loadPersistedState())
 
-  const [selectedMode, setSelectedMode] = useState(persisted?.selectedMode ?? "unsecured")
+  const [selectedMode, setSelectedModeState] = useState(persisted?.selectedMode ?? "unsecured")
+  const [chatModes, setChatModes] = useState(persisted?.chatModes ?? {})
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [utilityPanelOpen, setUtilityPanelOpen] = useState(false)
   const [utilityTab, setUtilityTab] = useState(persisted?.utilityTab ?? "systemPrompt")
@@ -79,9 +81,37 @@ export function UiProvider({ children }) {
   })
   const streamControllersRef = useRef({})
 
+  function normalizeMode(mode) {
+    return mode === "secured" ? "secured" : "unsecured"
+  }
+
+  function setSelectedMode(nextModeOrUpdater) {
+    setSelectedModeState((previousMode) => {
+      const nextMode = normalizeMode(
+        typeof nextModeOrUpdater === "function" ? nextModeOrUpdater(previousMode) : nextModeOrUpdater,
+      )
+
+      if (activeChatId) {
+        setChatModes((previousModes) => {
+          if (previousModes[activeChatId] === nextMode) {
+            return previousModes
+          }
+
+          return {
+            ...previousModes,
+            [activeChatId]: nextMode,
+          }
+        })
+      }
+
+      return nextMode
+    })
+  }
+
   function buildPersistableState() {
     return {
       selectedMode,
+      chatModes,
       utilityTab,
       consoleTab,
       promptScope,
@@ -98,6 +128,7 @@ export function UiProvider({ children }) {
     savePersistedState(buildPersistableState())
   }, [
     selectedMode,
+    chatModes,
     utilityTab,
     consoleTab,
     promptScope,
@@ -153,7 +184,8 @@ export function UiProvider({ children }) {
     streamControllersRef.current = {}
     setStreamingByChat({})
 
-    setSelectedMode(nextState.selectedMode)
+    setSelectedModeState(normalizeMode(nextState.selectedMode))
+    setChatModes(nextState.chatModes)
     setUtilityTab(nextState.utilityTab)
     setConsoleTab(nextState.consoleTab)
     setPromptScope(nextState.promptScope)
@@ -180,7 +212,8 @@ export function UiProvider({ children }) {
     Object.values(streamControllersRef.current).forEach((controller) => controller.abort())
     streamControllersRef.current = {}
 
-    setSelectedMode("unsecured")
+    setSelectedModeState("unsecured")
+    setChatModes({})
     setUtilityTab("systemPrompt")
     setConsoleTab("logs")
     setPromptScope("chat")
@@ -203,7 +236,7 @@ export function UiProvider({ children }) {
   }
 
   function createNewChat(options = {}) {
-    const { title, scenarioId, systemPrompt } = options
+    const { title, scenarioId, systemPrompt, mode } = options
     const nextId = `chat-${Date.now()}`
     const nextChat = {
       ...createEmptyChat(nextId),
@@ -211,6 +244,11 @@ export function UiProvider({ children }) {
       ...(typeof scenarioId === "string" ? { scenarioId } : {}),
     }
     setChats((prevChats) => [nextChat, ...prevChats])
+    const modeForChat = normalizeMode(mode ?? selectedMode)
+    setChatModes((prevModes) => ({
+      ...prevModes,
+      [nextId]: modeForChat,
+    }))
 
     if (typeof systemPrompt === "string" && systemPrompt.trim()) {
       setChatSystemPrompts((prevPrompts) => ({
@@ -336,6 +374,8 @@ export function UiProvider({ children }) {
       return false
     }
 
+    const modeForChat = chatModes[chatId] ?? selectedMode
+
     const effectiveSystemPrompt =
       typeof options.systemPrompt === "string" && options.systemPrompt.trim()
         ? options.systemPrompt.trim()
@@ -376,7 +416,7 @@ export function UiProvider({ children }) {
       type: "logs",
       level: "info",
       source: "chat",
-      message: `Sending message to ${selectedMode} backend`,
+      message: `Sending message to ${modeForChat} backend`,
     })
 
     let streamedText = ""
@@ -385,9 +425,9 @@ export function UiProvider({ children }) {
       if (useStreaming) {
         streamedText = await streamAssistantReply({
           messages: ollamaMessages,
-          mode: selectedMode,
+          mode: modeForChat,
           sessionStart,
-          options: selectedMode === "secured" ? { temperature: 0.2 } : { temperature: 0.7 },
+          options: modeForChat === "secured" ? { temperature: 0.2 } : { temperature: 0.7 },
           signal: controller.signal,
           onToken: (partialText) => {
             streamedText = partialText
@@ -439,9 +479,9 @@ export function UiProvider({ children }) {
       } else {
         const result = await requestAssistantReply({
           messages: ollamaMessages,
-          mode: selectedMode,
+          mode: modeForChat,
           sessionStart,
-          options: selectedMode === "secured" ? { temperature: 0.2 } : { temperature: 0.7 },
+          options: modeForChat === "secured" ? { temperature: 0.2 } : { temperature: 0.7 },
           signal: controller.signal,
         })
         streamedText = result.text
@@ -508,6 +548,11 @@ export function UiProvider({ children }) {
 
   function deleteChat(chatId) {
     setChats((prevChats) => prevChats.filter((chat) => chat.id !== chatId))
+    setChatModes((prevModes) => {
+      const nextModes = { ...prevModes }
+      delete nextModes[chatId]
+      return nextModes
+    })
     setChatSystemPrompts((prevPrompts) => {
       const nextPrompts = { ...prevPrompts }
       delete nextPrompts[chatId]
@@ -647,6 +692,15 @@ export function UiProvider({ children }) {
     // Intentionally run once on provider mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!activeChatId) {
+      return
+    }
+
+    const activeChatMode = chatModes[activeChatId] ?? "unsecured"
+    setSelectedModeState((previous) => (previous === activeChatMode ? previous : activeChatMode))
+  }, [activeChatId, chatModes])
 
   function getActiveSystemPrompt(chatId) {
     return chatSystemPrompts[chatId] ?? globalSystemPrompt

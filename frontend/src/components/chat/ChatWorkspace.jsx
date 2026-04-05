@@ -3,7 +3,6 @@ import { useNavigate } from "react-router"
 import { PanelRightOpen, SendHorizontal, Square } from "lucide-react"
 import { MenuIcon } from "../ui/menu"
 import MarkdownMessage from "./MarkdownMessage"
-import { attackScenarios } from "../../data/mockData"
 import { useUi } from "../../state/useUi"
 
 function modeBadgeClass(mode) {
@@ -56,15 +55,6 @@ export default function ChatWorkspace({ chatId }) {
   function handleStop() {
     if (!chat) return
     stopStreaming(chat.id)
-  }
-
-  function handleRunSamplePrompt() {
-    const firstSample = attackScenarios[0]
-    if (!firstSample) {
-      return
-    }
-
-    setDraftMessage(firstSample.samplePrompt)
   }
 
   if (!chat) {
@@ -149,9 +139,6 @@ export default function ChatWorkspace({ chatId }) {
           <button className="btn btn-ghost btn-sm" onClick={handleStop} disabled={!streaming}>
             <Square className="mr-1 h-3.5 w-3.5" />
             Stop
-          </button>
-          <button className="btn btn-soft btn-sm" onClick={handleRunSamplePrompt} disabled={streaming}>
-            Run Sample Prompt
           </button>
         </div>
       </footer>

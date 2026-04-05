@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { NavLink, useNavigate } from "react-router"
-import { ChevronDown, Download, MoreHorizontal, ShieldAlert, Trash2, Upload } from "lucide-react"
+import { ChevronDown, Download, MoreHorizontal, Trash2, Upload } from "lucide-react"
 import { MessageSquarePlusIcon } from "../ui/message-square-plus"
 import { SearchIcon } from "../ui/search"
 import { SquarePenIcon } from "../ui/square-pen"
 import { DeleteIcon } from "../ui/delete"
-import { ShieldCheckIcon } from "../ui/shield-check"
 import { demoModes } from "../../data/mockData"
 import { useUi } from "../../state/useUi"
 
@@ -313,24 +312,6 @@ export default function Sidebar() {
             ))}
           </ul>
         )}
-      </div>
-
-      <div className="mt-4 rounded-xl border border-base-300/70 bg-base-200/35 p-2">
-        <div className="px-2 py-2 text-xs uppercase tracking-[0.16em] text-base-content/60">Explore</div>
-        <ul className="menu w-full p-0 text-sm">
-          <li>
-            <NavLink to="/attack-scenarios" onClick={() => setSidebarOpen(false)}>
-              <ShieldAlert className="mr-2 h-4 w-4" />
-              Attack Scenarios
-            </NavLink>
-          </li>
-          <li>
-            <a className="pointer-events-none opacity-60">
-              <ShieldCheckIcon size={16} className="mr-2" />
-              Defense Notes (Soon)
-            </a>
-          </li>
-        </ul>
       </div>
     </div>
   )
