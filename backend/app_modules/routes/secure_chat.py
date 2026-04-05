@@ -16,6 +16,15 @@ from app_modules.utils import (
     write_sse,
 )
 from app_modules.utils.logging import create_trace_id
+from prompt_defender import check_prompt
+
+
+def _get_latest_user_prompt(messages) -> str:
+    """Return the latest user message content from a chat message list."""
+    for msg in reversed(messages or []):
+        if msg.get("role") == "user":
+            return msg.get("content", "") or ""
+    return ""
 
 
 def register_secure_chat_routes(app):
@@ -32,20 +41,39 @@ def register_secure_chat_routes(app):
             return jsonify(ok=False, error=validation["error"]), 400
 
         payload = validation["payload"]
+        messages = payload.get("messages", [])
         system_prompt = next(
-            (msg.get("content", "") for msg in payload.get("messages", []) if msg.get("role") == "system"),
+            (msg.get("content", "") for msg in messages if msg.get("role") == "system"),
             "",
         )
+        user_prompt = _get_latest_user_prompt(messages)
 
         app.logger.info(
             "[secure:%s] route=/api/chat/secure stage=received model=%s message_count=%s",
             trace_id,
             payload.get("model"),
-            len(payload.get("messages", [])),
+            len(messages),
         )
 
+        app.logger.info("[secure:%s] RL input=%r", trace_id, user_prompt[:120])
+        rl_result = check_prompt(user_prompt)
+        app.logger.info("[secure:%s] RL result=%s", trace_id, rl_result)
+
+        if rl_result == 1:
+            app.logger.warning(
+                "[secure:%s] route=/api/chat/secure stage=blocked_by_rl prompt=%s",
+                trace_id,
+                user_prompt[:100],
+            )
+            return jsonify(
+                ok=False,
+                error="Blocked by RL prompt defense",
+                traceId=trace_id,
+                source="rl_model",
+            ), 400
+
         # Apply defence layer
-        defence_result = defence_layer.process_secured_request(payload.get("messages", []), system_prompt)
+        defence_result = defence_layer.process_secured_request(messages, system_prompt)
 
         if not defence_result["passed"]:
             app.logger.warning(
@@ -149,21 +177,45 @@ def register_secure_chat_routes(app):
             return jsonify(ok=False, error=validation["error"]), 400
 
         payload = validation["payload"]
+        messages = payload.get("messages", [])
         system_prompt = next(
-            (msg.get("content", "") for msg in payload.get("messages", []) if msg.get("role") == "system"),
+            (msg.get("content", "") for msg in messages if msg.get("role") == "system"),
             "",
         )
+        user_prompt = _get_latest_user_prompt(messages)
 
         app.logger.info(
             "[secure:%s] route=/api/chat/secure/stream stage=received model=%s message_count=%s",
             trace_id,
             payload.get("model"),
-            len(payload.get("messages", [])),
+            len(messages),
         )
         app.logger.debug("[secure:%s] request_body=%s", trace_id, serialize_for_log(payload))
 
+        app.logger.info("[secure:%s] RL input=%r", trace_id, user_prompt[:120])
+        rl_result = check_prompt(user_prompt)
+        app.logger.info("[secure:%s] RL result=%s", trace_id, rl_result)
+
+        if rl_result == 1:
+            app.logger.warning(
+                "[secure:%s] route=/api/chat/secure/stream stage=blocked_by_rl prompt=%s",
+                trace_id,
+                user_prompt[:100],
+            )
+
+            def generate_rl_block() -> Iterable[str]:
+                yield write_sse("status", {"level": "error", "message": "Request blocked by RL prompt defense"})
+                yield write_sse("done", {"reason": "rl_block"})
+
+            response = Response(stream_with_context(generate_rl_block()), mimetype="text/event-stream")
+            response.headers["Cache-Control"] = "no-cache"
+            response.headers["Connection"] = "keep-alive"
+            response.headers["X-Proxy-Trace-Id"] = trace_id
+            response.headers["X-Secured-Backend"] = "true"
+            return response
+
         # Apply defence layer
-        defence_result = defence_layer.process_secured_request(payload.get("messages", []), system_prompt)
+        defence_result = defence_layer.process_secured_request(messages, system_prompt)
 
         if not defence_result["passed"]:
             app.logger.warning(

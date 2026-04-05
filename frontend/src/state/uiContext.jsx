@@ -393,7 +393,48 @@ export function UiProvider({ children }) {
             streamedText = partialText
             updateAssistantDraft(chatId, partialText)
           },
-          onEvent: (event) => addConsoleEvent(event),
+          onEvent: (event) => {
+            addConsoleEvent(event)
+
+            if (event.type === "status" && event.level === "error") {
+              setChats((prevChats) =>
+                prevChats.map((chat) => {
+                  if (chat.id !== chatId) return chat
+
+                  return {
+                    ...chat,
+                    messages: [
+                      ...chat.messages,
+                      {
+                        role: "assistant",
+                        text: "🚨 " + (event.message || "Blocked by security"),
+                      },
+                    ],
+                  }
+                }),
+              )
+              return
+            }
+
+            if (event.type === "alert") {
+              setChats((prevChats) =>
+                prevChats.map((chat) => {
+                  if (chat.id !== chatId) return chat
+
+                  return {
+                    ...chat,
+                    messages: [
+                      ...chat.messages,
+                      {
+                        role: "assistant",
+                        text: "⚠️ " + (event.message || "Suspicious input detected"),
+                      },
+                    ],
+                  }
+                }),
+              )
+            }
+          },
         })
       } else {
         const result = await requestAssistantReply({

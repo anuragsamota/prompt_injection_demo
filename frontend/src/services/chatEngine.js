@@ -187,40 +187,94 @@ export async function streamAssistantReply({
   const decoder = new TextDecoder("utf-8")
   let buffer = ""
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) {
-      break
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const events = buffer.split("\n\n")
+      buffer = events.pop() || ""
+
+      for (const rawEvent of events) {
+        const parsedEvent = parseSseEvent(rawEvent)
+        if (!parsedEvent) {
+          continue
+        }
+
+        if (parsedEvent.type === "status") {
+          onEvent?.({
+            type: "status",
+            level: parsedEvent.data?.level || "error",
+            source: "backend",
+            message: parsedEvent.data?.message || "Blocked by security",
+          })
+
+          try {
+            await reader.cancel()
+          } catch {
+            // ignore cancel errors
+          }
+
+          return streamedText
+        }
+
+        if (parsedEvent.type === "token") {
+          streamedText += parsedEvent.data?.content || ""
+          onToken?.(streamedText)
+          continue
+        }
+
+        if (parsedEvent.type === "alert") {
+          onEvent?.({
+            type: "alert",
+            level: "warning",
+            source: "backend",
+            message: parsedEvent.data?.message || "Security alert",
+            data: parsedEvent.data,
+          })
+          continue
+        }
+
+        if (parsedEvent.type === "error") {
+          onEvent?.({
+            type: "status",
+            level: "error",
+            source: "backend",
+            message: parsedEvent.data?.message || "Backend error",
+          })
+          continue
+        }
+
+        if (parsedEvent.type === "done") {
+          if (parsedEvent.data?.reason === "rl_block") {
+            onEvent?.({
+              type: "status",
+              level: "error",
+              source: "backend",
+              message: "Request blocked by RL prompt defense",
+            })
+
+            try {
+              await reader.cancel()
+            } catch {
+              // ignore cancel errors
+            }
+
+            return streamedText
+          }
+
+          continue
+        }
+      }
     }
-
-    buffer += decoder.decode(value, { stream: true })
-    const events = buffer.split("\n\n")
-    buffer = events.pop() || ""
-
-    for (const rawEvent of events) {
-      const parsedEvent = parseSseEvent(rawEvent)
-      if (!parsedEvent) {
-        continue
-      }
-
-      if (parsedEvent.type === "token") {
-        streamedText += parsedEvent.data?.content || ""
-        onToken?.(streamedText)
-        continue
-      }
-
-      if (parsedEvent.type === "done") {
-        continue
-      }
-
-      if (parsedEvent.type === "error") {
-        onEvent?.({
-          type: "status",
-          level: "error",
-          source: "backend",
-          message: parsedEvent.data?.message || "Backend error",
-        })
-      }
+  } finally {
+    try {
+      reader.releaseLock()
+    } catch {
+      // ignore release errors
     }
   }
 
